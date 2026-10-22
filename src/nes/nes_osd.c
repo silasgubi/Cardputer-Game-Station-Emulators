@@ -33,6 +33,12 @@ static bitmap_t *myBitmap = NULL;
 #define FB_HEIGHT   256                  // surallocate
 #define VISIBLE_H   NES_SCREEN_HEIGHT    // 240 visible
 
+// The PPU writes up to 8 px past each edge of a line (fine horizontal scroll). With
+// pitch == width, the left overflow lands at the end of the previous line and the
+// right-most column shows a delayed copy of the left edge. Keep 8 px of slack each side.
+#define FB_OVERDRAW 8
+#define FB_PITCH    (FB_WIDTH + 2 * FB_OVERDRAW)
+
 /* memory allocation */
 extern void *mem_alloc(int size, bool prefer_fast_memory) {
     (void)prefer_fast_memory;
@@ -95,7 +101,7 @@ static void clear(uint8 color) {
 
 static bitmap_t *lock_write(void) {
     if (!fb) {
-        const size_t fb_size = (size_t)FB_WIDTH * FB_HEIGHT; // 61 440
+        const size_t fb_size = (size_t)FB_PITCH * FB_HEIGHT + 2 * FB_OVERDRAW; // 69 648
         nofrendo_log_printf("OSD: alloc fb %u bytes (%dx%d)\n",
                             (unsigned)fb_size, FB_WIDTH, FB_HEIGHT);
 
@@ -105,7 +111,7 @@ static bitmap_t *lock_write(void) {
         memset(fb, 0, fb_size);
 
         // Create a bitmap that uses this framebuffer
-        myBitmap = bmp_createhw((uint8 *)fb, FB_WIDTH, FB_HEIGHT, FB_WIDTH);
+        myBitmap = bmp_createhw((uint8 *)fb + FB_OVERDRAW, FB_WIDTH, FB_HEIGHT, FB_PITCH);
         if (!myBitmap) { nofrendo_log_printf("OSD: bmp_createhw FAILED\n"); return NULL; }
 
         nofrendo_log_printf("OSD: lock_write -> bmp %p\n", (void*)myBitmap);
